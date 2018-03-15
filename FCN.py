@@ -168,15 +168,15 @@ def main(argv=None):
 
     print("Setting up image reader...")
     #train_records, valid_records = scene_parsing.read_dataset(FLAGS.data_dir)
-    print(os.path.join("FLAGS.data_dir", "train", 'img*.png'))
+    #print("Searching data from " + os.path.join("FLAGS.data_dir", "train", 'img*.png'))
     train_img = glob(os.path.join(FLAGS.data_dir, "train", 'img*.png'))
     #train_ann = glob(os.path.join(FLAGS.data_dir, "train", 'annotation*.png'))
     val_img = glob(os.path.join(FLAGS.data_dir, "validation", 'img*.png'))
     #val_ann = glob(os.path.join(FLAGS.data_dir, "validation", 'annotation*.png'))
     train_records = [ {'image': img, 'annotation': img.replace("img", "annotation")} for img in train_img]
     valid_records = [ {'image': img, 'annotation': img.replace("img", "annotation")} for img in val_img]
-    print(len(train_records))
-    print(len(valid_records))
+    print("Found " + str(len(train_records)) +" train examples and "
+          + str(len(valid_records)) + " test examples")
 
     print("Setting up dataset reader")
     image_options = {'resize': True, 'resize_size': IMAGE_SIZE}
@@ -184,6 +184,7 @@ def main(argv=None):
         train_dataset_reader = dataset.BatchDatset(train_records, image_options)
     validation_dataset_reader = dataset.BatchDatset(valid_records, image_options)
 
+    print("Setting up tensorflow (you'll probably get a bunch of warnings now)")
     sess = tf.Session()
 
     print("Setting up Saver...")
