@@ -2,6 +2,9 @@ from __future__ import print_function
 import tensorflow as tf
 import numpy as np
 
+from glob import glob
+import os
+
 import TensorflowUtils as utils
 import read_MITSceneParsingData as scene_parsing
 import datetime
@@ -11,7 +14,7 @@ from six.moves import xrange
 FLAGS = tf.flags.FLAGS
 tf.flags.DEFINE_integer("batch_size", "2", "batch size for training")
 tf.flags.DEFINE_string("logs_dir", "logs/", "path to logs directory")
-tf.flags.DEFINE_string("data_dir", "Data_zoo/MIT_SceneParsing/", "path to dataset")
+tf.flags.DEFINE_string("data_dir", "./lung_data", "path to dataset")
 tf.flags.DEFINE_float("learning_rate", "1e-4", "Learning rate for Adam Optimizer")
 tf.flags.DEFINE_string("model_dir", "Model_zoo/", "Path to vgg model mat")
 tf.flags.DEFINE_bool('debug', "False", "Debug mode: True/ False")
@@ -20,7 +23,7 @@ tf.flags.DEFINE_string('mode', "train", "Mode train/ test/ visualize")
 MODEL_URL = 'http://www.vlfeat.org/matconvnet/models/beta16/imagenet-vgg-verydeep-19.mat'
 
 MAX_ITERATION = int(1e5 + 1)
-NUM_OF_CLASSESS = 151
+NUM_OF_CLASSESS = 6+1
 IMAGE_SIZE = 224
 
 
@@ -147,8 +150,8 @@ def main(argv=None):
 
     pred_annotation, logits = inference(image, keep_probability)
     tf.summary.image("input_image", image, max_outputs=2)
-    tf.summary.image("ground_truth", tf.cast(annotation, tf.uint8), max_outputs=2)
-    tf.summary.image("pred_annotation", tf.cast(pred_annotation, tf.uint8), max_outputs=2)
+    tf.summary.image("ground_truth", colour_img(tf.cast(annotation, tf.uint8)), max_outputs=2)
+    tf.summary.image("pred_annotation", colour_img(tf.cast(pred_annotation, tf.uint8)), max_outputs=2)
     loss = tf.reduce_mean((tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits,
                                                                           labels=tf.squeeze(annotation, squeeze_dims=[3]),
                                                                           name="entropy")))
@@ -164,7 +167,14 @@ def main(argv=None):
     summary_op = tf.summary.merge_all()
 
     print("Setting up image reader...")
-    train_records, valid_records = scene_parsing.read_dataset(FLAGS.data_dir)
+    #train_records, valid_records = scene_parsing.read_dataset(FLAGS.data_dir)
+    print(os.path.join("FLAGS.data_dir", "train", 'img*.png'))
+    train_img = glob(os.path.join(FLAGS.data_dir, "train", 'img*.png'))
+    #train_ann = glob(os.path.join(FLAGS.data_dir, "train", 'annotation*.png'))
+    val_img = glob(os.path.join(FLAGS.data_dir, "validation", 'img*.png'))
+    #val_ann = glob(os.path.join(FLAGS.data_dir, "validation", 'annotation*.png'))
+    train_records = [ {'image': img, 'annotation': img.replace("img", "annotation")} for img in train_img]
+    valid_records = [ {'image': img, 'annotation': img.replace("img", "annotation")} for img in val_img]
     print(len(train_records))
     print(len(valid_records))
 
@@ -198,7 +208,7 @@ def main(argv=None):
                 print("Step: %d, Train_loss:%g" % (itr, train_loss))
                 summary_writer.add_summary(summary_str, itr)
 
-            if itr % 500 == 0:
+            if itr % 50 == 0:
                 valid_images, valid_annotations = validation_dataset_reader.next_batch(FLAGS.batch_size)
                 valid_loss = sess.run(loss, feed_dict={image: valid_images, annotation: valid_annotations,
                                                        keep_probability: 1.0})
@@ -218,6 +228,14 @@ def main(argv=None):
             utils.save_image(pred[itr].astype(np.uint8), FLAGS.logs_dir, name="pred_" + str(5+itr))
             print("Saved image: %d" % itr)
 
+def colour_img(image):
+    c_1 = tf.cast(tf.equal(image, 1), tf.int8)*64
+    c_2 = tf.cast(tf.equal(image, 2), tf.int8)*128
+    c_3 = tf.cast(tf.equal(image, 3), tf.int8)*196
+    
+    image = tf.cast(c_1 + c_2 + c_3, tf.uint8)
+    return image
+    
 
 if __name__ == "__main__":
     tf.app.run()
