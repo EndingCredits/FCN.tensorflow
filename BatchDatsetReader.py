@@ -25,7 +25,7 @@ class BatchDatset:
         color=True/False
         """
         print("Initializing Batch Dataset Reader...")
-        print(image_options)
+        print("Options: " + str(image_options))
         self.files = records_list
         self.image_options = image_options
         self._read_images()
@@ -36,8 +36,7 @@ class BatchDatset:
         self.__channels = False
         self.annotations = np.array(
             [np.expand_dims(self._transform(filename['annotation']), axis=3) for filename in self.files])
-        print (self.images.shape)
-        print (self.annotations.shape)
+        print("Data shapes: img=" + str(self.images.shape) + " ann=" + str(self.annotations.shape))
 
     def _transform(self, filename):
         image = misc.imread(filename)
