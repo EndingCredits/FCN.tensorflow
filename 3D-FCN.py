@@ -34,7 +34,7 @@ def inference(image, keep_prob):
     
     #using architecture described in https://arxiv.org/pdf/1704.06382.pdf
     #TODO: Look up preprocessing step
-    processed_image = image
+    processed_image = image/100
 
     with tf.variable_scope("inference"):
     
@@ -123,8 +123,8 @@ def main(argv=None):
     print("Building graph...")
     pred_annotation, logits = inference(image, keep_probability)
     tf.summary.image("input_image", image[..., IMAGE_DEPTH//2, :], max_outputs=2)
-    tf.summary.image("ground_truth", annotation[..., IMAGE_DEPTH//2, 1:], max_outputs=2)
-    tf.summary.image("pred_annotation", pred_annotation[..., IMAGE_DEPTH//2, 1:], max_outputs=2)
+    tf.summary.image("ground_truth", tf.cast(annotation[..., IMAGE_DEPTH//2, 1:]*255, tf.uint8), max_outputs=2)
+    tf.summary.image("pred_annotation", logits[..., IMAGE_DEPTH//2, 1:]*255, max_outputs=2)
     loss = tf.reduce_mean((tf.nn.softmax_cross_entropy_with_logits(
         logits=logits, labels=annotation, name="entropy")))
     tf.summary.scalar("entropy", loss)
