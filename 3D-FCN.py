@@ -21,8 +21,8 @@ tf.flags.DEFINE_string('mode', "train", "Mode train/ test/ visualize")
 
 MAX_ITERATION = int(1e5 + 1)
 NUM_OF_CLASSES = 3+1
-IMAGE_SIZE = 64
-IMAGE_DEPTH = 10
+IMAGE_SIZE = 192
+IMAGE_DEPTH = 8
 
 def inference(image, keep_prob):
     """
@@ -44,12 +44,14 @@ def inference(image, keep_prob):
             b1 = utils.bias_variable([out_size//2], name="b_d_"+str(i)+"_1")
             conv1 = utils.conv3d_basic(x, W1, b1)
             relu1 = tf.nn.relu(conv1, name="relu_d_"+str(i)+"_1")
+            relu1 = tf.nn.dropout(relu1, keep_prob=keep_prob)
             
             # Down 2
             W2 = utils.weight_variable([3, 3, 3, out_size//2, out_size], name="W_d_"+str(i)+"_2")
             b2 = utils.bias_variable([out_size], name="b_d_"+str(i)+"_2")
             conv2 = utils.conv3d_basic(relu1, W2, b2)
             relu2 = tf.nn.relu(conv2, name="relu_d_"+str(i)+"_2")
+            relu2 = tf.nn.dropout(relu2, keep_prob=keep_prob)
             
             # Pool 1
             pool = utils.max_pool_2x2x2(relu2)
@@ -79,14 +81,16 @@ def inference(image, keep_prob):
             b2 = utils.bias_variable([out_size], name="b_u_"+str(i)+"_2")
             conv1 = utils.conv3d_basic(conc1, W2, b2)
             relu2 = tf.nn.relu(conv1, name="relu_u_"+str(i)+"_2")
+            relu2 = tf.nn.dropout(relu2, keep_prob=keep_prob)
             
             # Conv2
             W3 = utils.weight_variable([3, 3, 3, out_size, out_size], name="W_u_"+str(i)+"_3")
             b3 = utils.bias_variable([out_size], name="b_u_"+str(i)+"_3")
             conv3 = utils.conv3d_basic(relu2, W3, b3)
-            relu4 = tf.nn.relu(conv3, name="relu_u_"+str(i)+"_3")
+            relu3 = tf.nn.relu(conv3, name="relu_u_"+str(i)+"_3")
+            relu3 = tf.nn.dropout(relu3, keep_prob=keep_prob)
             
-            return relu4
+            return relu3
             
         #Apply 3 Up layers with skip connections
         u3 = up_layer(d4, d3, 512, 256, 256, 3)
@@ -94,7 +98,7 @@ def inference(image, keep_prob):
         u1 = up_layer(u2, d1, 128, 64, 64, 1)
         
         #Apply a final Conv layer
-        W = utils.weight_variable([3, 3, 3, 64, NUM_OF_CLASSES], name="W_o")
+        W = utils.weight_variable([1, 1, 1, 64, NUM_OF_CLASSES], name="W_o")
         b = utils.bias_variable([NUM_OF_CLASSES], name="b_o")
         conv = utils.conv3d_basic(u1, W, b)
         
@@ -114,7 +118,7 @@ def train(loss_val, var_list):
 
 
 def main(argv=None):
-    # Set up TF placeholderd
+    # Set up TF placeholders
     keep_probability = tf.placeholder(tf.float32, name="keep_probabilty")
     image = tf.placeholder(tf.float32, shape=[None, IMAGE_SIZE, IMAGE_SIZE, IMAGE_DEPTH, 1], name="input_image")
     annotation = tf.placeholder(tf.int32, shape=[None, IMAGE_SIZE, IMAGE_SIZE, IMAGE_DEPTH, NUM_OF_CLASSES], name="annotation")
@@ -124,9 +128,11 @@ def main(argv=None):
     pred_annotation, logits = inference(image, keep_probability)
     tf.summary.image("input_image", image[..., IMAGE_DEPTH//2, :], max_outputs=2)
     tf.summary.image("ground_truth", tf.cast(annotation[..., IMAGE_DEPTH//2, 1:]*255, tf.uint8), max_outputs=2)
-    tf.summary.image("pred_annotation", logits[..., IMAGE_DEPTH//2, 1:]*255, max_outputs=2)
-    loss = tf.reduce_mean((tf.nn.softmax_cross_entropy_with_logits(
-        logits=logits, labels=annotation, name="entropy")))
+    tf.summary.image("pred_annotation", tf.nn.sigmoid(logits[..., IMAGE_DEPTH//2, 1:])*255, max_outputs=2)
+    loss = tf.reduce_mean((tf.nn.sigmoid_cross_entropy_with_logits(
+        logits=logits,
+        labels=tf.cast(annotation, tf.float32),#tf.argmax(annotation, dimension=4),
+        name="entropy")))
     tf.summary.scalar("entropy", loss)
 
     # Add variables to summaries as needed
@@ -164,7 +170,7 @@ def main(argv=None):
 
             sess.run(train_op, feed_dict=feed_dict)
 
-            if itr % 1 == 0:
+            if itr % 10 == 0:
                 train_loss, summary_str = sess.run([loss, summary_op], feed_dict=feed_dict)
                 print("%s Step: %d, Train_loss:%g" % (datetime.datetime.now().strftime('%H:%M:%S'), itr, train_loss))
                 summary_writer.add_summary(summary_str, itr)
@@ -181,20 +187,36 @@ def main(argv=None):
     elif FLAGS.mode == "visualize":
         print("Running visualisation...")
         valid_images, valid_annotations = validation_dataset_reader.get_random_batch(FLAGS.batch_size)
-        pred = sess.run(pred_annotation, feed_dict={image: valid_images, annotation: valid_annotations,
-                                                    keep_probability: 1.0})
-        valid_annotations = np.squeeze(valid_annotations, axis=3)
-        pred = np.squeeze(pred, axis=3)
-
+        pred = sess.run(logits, feed_dict={image: valid_images, annotation: valid_annotations,
+                       keep_probability: 1.0})
+        mx = np.max(valid_images) ; mn = np.min(valid_images)
+        valid_images = ( np.repeat(valid_images, 3, 4) - mn ) * 255 / (mx - mn)
+        valid_annotations = valid_annotations*255
+        pred = sigmoid(pred)*255
+        
+        full = []
         for itr in range(FLAGS.batch_size):
           for lay in range(IMAGE_DEPTH):
-            utils.save_image(valid_images[itr,...,lay,:].astype(np.uint8), FLAGS.logs_dir, name="inp_" + str(itr)+"."+str(lay))
-            utils.save_image(valid_annotations[itr,...,lay,:].astype(np.uint8), FLAGS.logs_dir, name="gt_" + str(itr)+"."+str(lay))
-            utils.save_image(pred[itr,...,lay,:].astype(np.uint8), FLAGS.logs_dir, name="pred_" + str(itr)+"."+str(lay))
-            print("Saved image: %d" % itr)
+            inp = valid_images[itr,...,lay,:].astype(np.uint8)#, FLAGS.logs_dir, name="inp_" + str(itr)+"."+str(lay)
+            ann = valid_annotations[itr,...,lay,1:].astype(np.uint8)#, FLAGS.logs_dir, name="gt_" + str(itr)+"."+str(lay)
+            pre = pred[itr,...,lay,1:].astype(np.uint8)#, FLAGS.logs_dir, name="pred_" + str(itr)+"."+str(lay)
+            all3 = np.concatenate([inp, ann, pre], axis=1)
+            full.append(all3)
+            print("Processed image: %d.%d" % (itr, lay))
+        full = np.concatenate(full, axis=0)
+        utils.save_image(full, FLAGS.logs_dir, name="full")
+        
 
 def colour_img(image):
-    return image[:,:,1:]*255
+    c_1 = tf.cast(tf.equal(image, 1), tf.int8)*64
+    c_2 = tf.cast(tf.equal(image, 2), tf.int8)*128
+    c_3 = tf.cast(tf.equal(image, 3), tf.int8)*196
+    
+    image = tf.cast(c_1 + c_2 + c_3, tf.uint8)
+    return image
+    
+def sigmoid(x, derivative=False):
+    return x*(1-x) if derivative else 1/(1+np.exp(-x))
     
 
 if __name__ == "__main__":

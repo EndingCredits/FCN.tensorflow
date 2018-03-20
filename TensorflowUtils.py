@@ -89,11 +89,19 @@ def conv2d_basic(x, W, bias):
     conv = tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding="SAME")
     return tf.nn.bias_add(conv, bias)
 
-
 def conv2d_strided(x, W, b):
     conv = tf.nn.conv2d(x, W, strides=[1, 2, 2, 1], padding="SAME")
     return tf.nn.bias_add(conv, b)
-
+    
+    
+def conv3d_basic(x, W, bias):
+    conv = tf.nn.conv3d(x, W, strides=[1, 1, 1, 1, 1], padding="SAME")
+    return tf.nn.bias_add(conv, bias)
+    
+def conv3d_strided(x, W, b):
+    conv = tf.nn.conv3d(x, W, strides=[1, 3, 3, 3, 1], padding="SAME")
+    return tf.nn.bias_add(conv, b)
+    
 
 def conv2d_transpose_strided(x, W, b, output_shape=None, stride = 2):
     # print x.get_shape()
@@ -106,6 +114,19 @@ def conv2d_transpose_strided(x, W, b, output_shape=None, stride = 2):
     # print output_shape
     conv = tf.nn.conv2d_transpose(x, W, output_shape, strides=[1, stride, stride, 1], padding="SAME")
     return tf.nn.bias_add(conv, b)
+    
+def conv3d_transpose_strided(x, W, b, output_shape=None, stride = 2):
+    # print x.get_shape()
+    # print W.get_shape()
+    if output_shape is None:
+        output_shape = x.get_shape().as_list()
+        output_shape[1] *= 2
+        output_shape[2] *= 2
+        output_shape[3] *= 2
+        output_shape[4] = W.get_shape().as_list()[3]
+    # print output_shape
+    conv = tf.nn.conv3d_transpose(x, W, output_shape, strides=[1, stride, stride, stride, 1], padding="SAME")
+    return tf.nn.bias_add(conv, b)
 
 
 def leaky_relu(x, alpha=0.0, name=""):
@@ -114,6 +135,9 @@ def leaky_relu(x, alpha=0.0, name=""):
 
 def max_pool_2x2(x):
     return tf.nn.max_pool(x, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
+    
+def max_pool_2x2x2(x):
+    return tf.nn.max_pool3d(x, ksize=[1, 2, 2, 2, 1], strides=[1, 2, 2, 2, 1], padding="SAME")
 
 
 def avg_pool_2x2(x):

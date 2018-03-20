@@ -2,8 +2,10 @@
 Code ideas from https://github.com/Newmu/dcgan and tensorflow mnist dataset reader
 """
 import numpy as np
-import scipy.misc
+import scipy.misc as misc
 import scipy.io as sio
+#import skimage
+from skimage.transform import resize
 
 
 class LungDatset:
@@ -21,9 +23,9 @@ class LungDatset:
         right_lung_var_name = 'Right2'
         trachea_var_name    = 'Trachea2'
         
-        self.start_offset = 128
-        self.output_size = 64
-        self.output_depth = 10
+        self.start_offset = 96#128
+        self.output_size = 192
+        self.output_depth = 8
         self.slices = lung_slices
         self.slices = np.array([ s[:self.output_depth] for s in self.slices if len(s) >= self.output_depth ])
         
@@ -33,11 +35,13 @@ class LungDatset:
 
         print("Initializing Batch Dataset Reader...")
         print("Options: " + str(options))
+        print("Loading "+str(matfile)+" ...")
         try:
             mat_contents = sio.loadmat(matfile)
         except:
             print("Could not load .mat file"  + matfile + " !")
         
+        print("Processing data matrix...")
         self.images = mat_contents[images_var_name][..., np.newaxis]
         left = mat_contents[left_lung_var_name]
         right = mat_contents[right_lung_var_name]
@@ -48,13 +52,22 @@ class LungDatset:
             left[..., np.newaxis],
             right[..., np.newaxis],
             trachea[..., np.newaxis]), axis=3),axis=4)
+        
+        print("Resizing images...")
+        resize_size = 256
+        new_img_shape = [resize_size]*2 + list(np.shape(self.images))[2:]
+        new_ann_shape = [resize_size]*2 + list(np.shape(self.annotations))[2:]
+        self.images = resize(self.images.reshape([512,512,-1]), 
+            [resize_size, resize_size], mode='constant').reshape(new_img_shape)
+        self.annotations = resize(self.annotations.reshape([512,512,-1]),
+            [resize_size, resize_size], mode='constant').reshape(new_ann_shape)
             
     def _get_images(self, indices):
         batch_images = self.images[:, :, self.slices[indices], :]
         batch_annotations = self.annotations[:, :, self.slices[indices], :]
         
         #get random ranges
-        box_left = self.start_offset ; box_right = 512 - self.start_offset
+        box_left = self.start_offset ; box_right = 256 - self.start_offset
         x = np.random.randint(box_left, box_right) - self.output_size//2
         y = np.random.randint(box_left, box_right) - self.output_size//2 
          
