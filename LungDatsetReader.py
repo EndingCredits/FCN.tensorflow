@@ -112,6 +112,10 @@ class LungDatset:
             print("****************** Epochs completed: " + str(self.epochs_completed) + "******************")
             #self.reset_batch_offset() #not needed
             # Shuffle the data
+            temp = list(zip(self.images, self.annotations))
+            np.random.shuffle(temp)
+            self.images, self.annotations = zip(*temp)
+
             np.random.shuffle(self.files)
             # Start next epoch
             start = 0

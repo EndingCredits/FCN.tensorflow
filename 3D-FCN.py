@@ -13,16 +13,16 @@ from six.moves import xrange
 FLAGS = tf.flags.FLAGS
 tf.flags.DEFINE_integer("batch_size", "2", "batch size for training")
 tf.flags.DEFINE_string("logs_dir", "logs3D/", "path to logs directory")
-tf.flags.DEFINE_string("data_dir", "./lung_data", "path to dataset")
+tf.flags.DEFINE_string("data_dir", "./new_lung_data", "path to dataset")
 tf.flags.DEFINE_float("learning_rate", "1e-4", "Learning rate for Adam Optimizer")
 tf.flags.DEFINE_string("model_dir", "Model_zoo3D/", "Path to vgg model mat")
 tf.flags.DEFINE_bool('debug', "False", "Debug mode: True/ False")
 tf.flags.DEFINE_string('mode', "train", "Mode train/ test/ visualize")
 
 MAX_ITERATION = int(1e5 + 1)
-NUM_OF_CLASSES = 4 #3+1 # We don't count empty
-IMAGE_SIZE = 64
-IMAGE_DEPTH = 16
+NUM_OF_CLASSES = 4 #3+1 # 4 classes, We don't count empty this time
+IMAGE_SIZE = 96
+IMAGE_DEPTH = 48
 
 def inference(image, keep_prob):
     """
@@ -121,7 +121,7 @@ def main(argv=None):
     # Set up TF placeholders
     keep_probability = tf.placeholder(tf.float32, name="keep_probabilty")
     image = tf.placeholder(tf.float32, shape=[None, IMAGE_SIZE, IMAGE_SIZE, IMAGE_DEPTH, 1], name="input_image")
-    annotation = tf.placeholder(tf.int32, shape=[None, IMAGE_SIZE, IMAGE_SIZE, IMAGE_DEPTH, NUM_OF_CLASSES], name="annotation")
+    annotation = tf.placeholder(tf.float32, shape=[None, IMAGE_SIZE, IMAGE_SIZE, IMAGE_DEPTH, NUM_OF_CLASSES], name="annotation")
     
     # Build graph
     print("Building graph...")
@@ -148,9 +148,13 @@ def main(argv=None):
     print("Setting up dataset readers")
     #train_dataset_reader = dataset.LungDatset("LungTrainingData.mat", None)
     #validation_dataset_reader = train_dataset_reader
-    train_dataset_files = glob('newdata/CT*')
+    data_dir = FLAGS.data_dir
+    train_data_path = os.path.join(data_dir, 'train', 'CT*')
+    train_dataset_files = glob(train_data_path)
     train_dataset_reader = dataset.LungDatset(train_dataset_files, { 'region_size': (IMAGE_SIZE, IMAGE_SIZE, IMAGE_DEPTH) })
-    validation_dataset_reader = train_dataset_reader
+    valid_data_path = os.path.join(data_dir, 'validation', 'CT*')
+    valid_dataset_files = glob(valid_data_path)
+    validation_dataset_reader = dataset.LungDatset(valid_dataset_files, { 'region_size': (IMAGE_SIZE, IMAGE_SIZE, IMAGE_DEPTH) })
 
     print("Setting up tensorflow session (you'll probably get a bunch of warnings now)")
     sess = tf.Session()
@@ -178,7 +182,7 @@ def main(argv=None):
                 print("%s Step: %d, Train_loss:%g" % (datetime.datetime.now().strftime('%H:%M:%S'), itr, train_loss))
                 summary_writer.add_summary(summary_str, itr)
 
-            if itr % 10 == 0:
+            if itr % 50 == 0:
                 valid_images, valid_annotations = validation_dataset_reader.next_batch(FLAGS.batch_size)
                 valid_loss = sess.run(loss,
                     feed_dict={image: valid_images,
