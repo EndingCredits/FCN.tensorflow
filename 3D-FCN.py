@@ -20,9 +20,9 @@ tf.flags.DEFINE_bool('debug', "False", "Debug mode: True/ False")
 tf.flags.DEFINE_string('mode', "train", "Mode train/ test/ visualize")
 
 MAX_ITERATION = int(1e5 + 1)
-NUM_OF_CLASSES = 3+1
-IMAGE_SIZE = 192
-IMAGE_DEPTH = 8
+NUM_OF_CLASSES = 4 #3+1 # We don't count empty
+IMAGE_SIZE = 64
+IMAGE_DEPTH = 16
 
 def inference(image, keep_prob):
     """
@@ -127,8 +127,8 @@ def main(argv=None):
     print("Building graph...")
     pred_annotation, logits = inference(image, keep_probability)
     tf.summary.image("input_image", image[..., IMAGE_DEPTH//2, :], max_outputs=2)
-    tf.summary.image("ground_truth", tf.cast(annotation[..., IMAGE_DEPTH//2, 1:]*255, tf.uint8), max_outputs=2)
-    tf.summary.image("pred_annotation", tf.nn.sigmoid(logits[..., IMAGE_DEPTH//2, 1:])*255, max_outputs=2)
+    tf.summary.image("ground_truth", tf.cast(annotation[..., IMAGE_DEPTH//2, :-1]*255, tf.uint8), max_outputs=2)
+    tf.summary.image("pred_annotation", tf.nn.sigmoid(logits[..., IMAGE_DEPTH//2, :-1])*255, max_outputs=2)
     loss = tf.reduce_mean((tf.nn.sigmoid_cross_entropy_with_logits(
         logits=logits,
         labels=tf.cast(annotation, tf.float32),#tf.argmax(annotation, dimension=4),
@@ -146,7 +146,10 @@ def main(argv=None):
     summary_op = tf.summary.merge_all()
 
     print("Setting up dataset readers")
-    train_dataset_reader = dataset.LungDatset("LungTrainingData.mat", None)
+    #train_dataset_reader = dataset.LungDatset("LungTrainingData.mat", None)
+    #validation_dataset_reader = train_dataset_reader
+    train_dataset_files = glob('newdata/CT*')
+    train_dataset_reader = dataset.LungDatset(train_dataset_files, { 'region_size': (IMAGE_SIZE, IMAGE_SIZE, IMAGE_DEPTH) })
     validation_dataset_reader = train_dataset_reader
 
     print("Setting up tensorflow session (you'll probably get a bunch of warnings now)")
@@ -197,9 +200,9 @@ def main(argv=None):
         full = []
         for itr in range(FLAGS.batch_size):
           for lay in range(IMAGE_DEPTH):
-            inp = valid_images[itr,...,lay,:].astype(np.uint8)#, FLAGS.logs_dir, name="inp_" + str(itr)+"."+str(lay)
-            ann = valid_annotations[itr,...,lay,1:].astype(np.uint8)#, FLAGS.logs_dir, name="gt_" + str(itr)+"."+str(lay)
-            pre = pred[itr,...,lay,1:].astype(np.uint8)#, FLAGS.logs_dir, name="pred_" + str(itr)+"."+str(lay)
+            inp = valid_images[itr,...,lay,:-1].astype(np.uint8)#, FLAGS.logs_dir, name="inp_" + str(itr)+"."+str(lay)
+            ann = valid_annotations[itr,...,lay,:-1].astype(np.uint8)#, FLAGS.logs_dir, name="gt_" + str(itr)+"."+str(lay)
+            pre = pred[itr,...,lay,:-1].astype(np.uint8)#, FLAGS.logs_dir, name="pred_" + str(itr)+"."+str(lay)
             all3 = np.concatenate([inp, ann, pre], axis=1)
             full.append(all3)
             print("Processed image: %d.%d" % (itr, lay))
@@ -221,51 +224,4 @@ def sigmoid(x, derivative=False):
 
 if __name__ == "__main__":
     tf.app.run()
-    
-    
-#TODO: Remove this once it's tested
-"""
-# Down 2_1
-W2_1 = utils.weight_variable([3, 3, 3, 64, 64], name="W2_1")
-b2_1 = utils.bias_variable([64], name="b2_1")
-conv2_1 = utils.conv3d(pool_1, W2_1, b2_1)
-relu2_1 = tf.nn.relu(conv2_1, name="relu2_1")
 
-# Down 2_2
-W2_2 = utils.weight_variable([3, 3, 3, 64, 128], name="W2_2")
-b2_2 = utils.bias_variable([128], name="b2_2")
-conv2_2 = utils.conv3d_basic(relu2_1, W2_2, b2_2)
-relu2_2 = tf.nn.relu(conv2_2, name="relu2_2")
-
-# Pool 2
-pool_2 = utils.max_pool_2x2(relu2_2)
-
-
-# Down 3_1
-W3_1 = utils.weight_variable([3, 3, 3, 128, 129], name="W3_1")
-b3_1 = utils.bias_variable([128], name="b3_1")
-conv3_1 = utils.conv3d(pool_2, W3_1, b3_1)
-relu3_1 = tf.nn.relu(conv3_1, name="relu3_1")
-
-# Down 2_2
-W3_2 = utils.weight_variable([3, 3, 3, 128, 256], name="W3_2")
-b3_2 = utils.bias_variable([256], name="b3_2")
-conv3_2 = utils.conv3d_basic(relu3_1, W3_2, b3_2)
-relu3_2 = tf.nn.relu(conv3_2, name="relu3_2")
-
-# Pool 2
-pool_3 = utils.max_pool_2x2(relu3_2)
-
-
-# Down 4_1
-W4_1 = utils.weight_variable([3, 3, 3, 256, 256], name="W4_1")
-b4_1 = utils.bias_variable([256], name="b4_1")
-conv4_1 = utils.conv3d(pool_3, W4_1, b4_1)
-relu4_1 = tf.nn.relu(conv4_1, name="relu4_1")
-
-# Down 4_2
-W4_2 = utils.weight_variable([3, 3, 3, 256, 512], name="W4_2")
-b4_2 = utils.bias_variable([512], name="b4_2")
-conv4_2 = utils.conv3d_basic(relu4_1, W4_2, b4_2)
-relu4_2 = tf.nn.relu(conv4_2, name="relu4_2")
-"""
